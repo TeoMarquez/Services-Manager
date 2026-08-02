@@ -3,7 +3,6 @@ use crate::db::{
     ServiceRepository
 };
 
-
 pub enum ServiceFilter {
     All,
     Present,
@@ -11,7 +10,8 @@ pub enum ServiceFilter {
     System,
     User,
     Visible,
-    Hidden
+    Hidden,
+    Tagged(i64)
 }
 
 #[derive(Debug)]
@@ -23,43 +23,64 @@ pub struct Page<T> {
     pub total_pages: u32,
 }
 
-pub fn list_services(
-    repository: &ServiceRepository,
-    filter: ServiceFilter,
-) -> Vec<Service> {
+pub struct QueryFilter {
+    pub condition: String,
+    pub params: Vec<i64>,
+}
+
+fn build_filter(filter: ServiceFilter) -> QueryFilter {
 
     match filter {
 
-        ServiceFilter::All => {
-            repository.find_all()
+        ServiceFilter::All => QueryFilter {
+            condition: "1=1".into(),
+            params: vec![],
         },
 
-        ServiceFilter::Present => {
-            repository.find_present()
+        ServiceFilter::Present => QueryFilter {
+            condition: "present = 1".into(),
+            params: vec![],
         },
 
-        ServiceFilter::Missing => {
-            repository.find_missing()
+        ServiceFilter::Missing => QueryFilter {
+            condition: "present = 0".into(),
+            params: vec![],
         },
 
-        ServiceFilter::System => {
-            repository.find_system()
+        ServiceFilter::System => QueryFilter {
+            condition: "system_service = 1".into(),
+            params: vec![],
         },
 
-        ServiceFilter::User => {
-            repository.find_user()
+        ServiceFilter::User => QueryFilter {
+            condition: "system_service = 0".into(),
+            params: vec![],
         },
 
-        ServiceFilter::Visible => {
-            repository.find_visible()
-        },
-        
-        ServiceFilter::Hidden => {
-            repository.find_hidden()
+        ServiceFilter::Visible => QueryFilter {
+            condition: "visible = 1".into(),
+            params: vec![],
         },
 
+        ServiceFilter::Hidden => QueryFilter {
+            condition: "visible = 0".into(),
+            params: vec![],
+        },
+
+       ServiceFilter::Tagged(tag_id) => QueryFilter {
+            condition: format!(
+                "
+                id IN (
+                    SELECT service_id
+                    FROM service_tags
+                    WHERE tag_id = {}
+                )
+                ",
+                tag_id
+            ),
+            params: vec![],
+        },
     }
-    .expect("Could not list services")
 
 }
 
@@ -71,22 +92,14 @@ pub fn list_page(
 ) -> Page<Service> {
 
 
-    let condition = match filter {
-
-        ServiceFilter::All => "1=1",
-        ServiceFilter::Present => "present = 1",
-        ServiceFilter::Missing => "present = 0",
-        ServiceFilter::System => "system_service = 1",
-        ServiceFilter::User => "system_service = 0",
-        ServiceFilter::Visible => "visible = 1",
-        ServiceFilter::Hidden => "visible = 0",
-    };
+    let query_filter = build_filter(filter);
 
 
     let (items, total_items) =
         repository
             .find_page(
-                condition,
+                &query_filter.condition,
+                &query_filter.params,
                 page,
                 per_page
             )

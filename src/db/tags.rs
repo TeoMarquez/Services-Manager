@@ -25,7 +25,22 @@ impl<'a> TagRepository<'a> {
 
     }
 
+    pub fn delete(
+        &self,
+        name: &str
+    ) -> Result<()> {
 
+        self.conn.execute(
+            "
+            DELETE FROM tags
+            WHERE name = ?
+            ",
+            [name],
+        )?;
+
+        Ok(())
+    }
+    
     pub fn create(
         &self,
         name: &str

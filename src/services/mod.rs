@@ -1,4 +1,4 @@
 pub mod sync;
 pub mod list;
-pub mod remove;
+pub mod delete;
 pub mod visibility;

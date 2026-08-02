@@ -237,6 +237,7 @@ impl<'a> ServiceRepository<'a> {
     pub fn find_page(
         &self,
         condition: &str,
+        params: &[i64],
         page: u32,
         per_page: u32,
     ) -> Result<(Vec<Service>, u32)> {
@@ -256,7 +257,7 @@ impl<'a> ServiceRepository<'a> {
 
         let total: u32 = self.conn.query_row(
             &count_query,
-            [],
+            rusqlite::params_from_iter(params),
             |row| row.get(0)
         )?;
 
@@ -286,12 +287,15 @@ impl<'a> ServiceRepository<'a> {
         let mut stmt = self.conn.prepare(&query)?;
 
 
+        let mut query_params = params.to_vec();
+
+        query_params.push(per_page as i64);
+        query_params.push(offset as i64);
+
+
         let services = stmt
             .query_map(
-                [
-                    per_page as i64,
-                    offset as i64
-                ],
+                rusqlite::params_from_iter(query_params),
                 |row| {
 
                     Ok(Service {
@@ -315,7 +319,6 @@ impl<'a> ServiceRepository<'a> {
 
         Ok((services, total))
     }
-
     pub fn delete(
         &self,
         unit_name: &str
@@ -353,9 +356,48 @@ impl<'a> ServiceRepository<'a> {
         Ok(())
     }
 
+    pub fn find_by_tag(
+        &self,
+        tag_id: i64
+    ) -> Result<Vec<Service>> {
+
+        self.find_where(
+            &format!(
+                "
+                id IN (
+                    SELECT service_id
+                    FROM service_tags
+                    WHERE tag_id = {}
+                )
+                ",
+                tag_id
+            )
+        )
+
+    }
 
     // start managing tags 
 
+    pub fn remove_tag(
+        &self,
+        service_id: i64,
+        tag_id: i64
+    ) -> Result<()> {
+
+        self.conn.execute(
+            "
+            DELETE FROM service_tags
+            WHERE service_id = ?
+            AND tag_id = ?
+            ",
+            params![
+                service_id,
+                tag_id
+            ],
+        )?;
+
+        Ok(())
+    }
     pub fn add_tag(
         &self,
         service_id: i64,
