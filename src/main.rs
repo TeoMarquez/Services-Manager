@@ -5,7 +5,8 @@ mod services;
 
 use db::{
     create_connection,
-    ServiceRepository
+    ServiceRepository,
+    TagRepository
 };
 
 use services::list::{
@@ -28,8 +29,6 @@ fn main() {
 
 
     let repo = ServiceRepository::new(&db);
-use services::list::list_services;
-
     let system =
         MockSystem::new();
 
@@ -44,11 +43,7 @@ use services::list::list_services;
         .unwrap();
 
 
-    println!("{:?}", service);
-    let services =
-    list_services(&repo, ServiceFilter::All);
-
-let page = list_page(
+    let page = list_page(
     &repo,
     ServiceFilter::All,
     2,
@@ -68,13 +63,16 @@ for service in page.items {
 
 }
 
-for service in services {
+let tags = TagRepository::new(&db);
 
-    println!(
-        "{} - present:{}",
-        service.unit_name,
-        service.present
-    );
+
+tags.create(
+    "minecraft"
+);
+
+for tag in tags.find_all().unwrap() {
+
+    println!("{:?}", tag);
 
 }
 }
