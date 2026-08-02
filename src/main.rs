@@ -6,19 +6,40 @@ mod services;
 use db::{
     create_connection,
     ServiceRepository,
-    TagRepository
 };
 
-use services::list::{
-    list_page,  
-    ServiceFilter
+use system::MockSystem;
+
+use services::{
+    sync::sync,
+    list::{
+        list_page,
+        ServiceFilter
+    },
+    visibility::{
+        hide_service,
+        show_service
+    },
+    remove::remove_service,
 };
 
-use system::{
-    MockSystem
-};
 
-use services::sync::sync;
+fn print_services(
+    title: &str,
+    page: Vec<db::models::Service>
+) {
+    println!("\n=== {} ===", title);
+
+    for service in page {
+        println!(
+            "{} | visible:{} | present:{}",
+            service.unit_name,
+            service.visible,
+            service.present
+        );
+    }
+}
+
 
 fn main() {
 
@@ -28,64 +49,105 @@ fn main() {
     let db = create_connection();
 
 
-    let repo = ServiceRepository::new(&db);
+    let repo =
+        ServiceRepository::new(&db);
+
+
     let system =
         MockSystem::new();
 
 
+    //
+    // SYNC INICIAL
+    //
     sync(
         &system,
         &repo
     );
 
-    let service = repo
-        .find_by_unit_name("test.service")
+
+    //
+    // LISTA INICIAL
+    //
+    let visible = repo
+        .find_visible()
         .unwrap();
 
-
-    let page = list_page(
-    &repo,
-    ServiceFilter::All,
-    2,
-    2
-);
-
-
-println!("{:?}", page);
-
-
-for service in page.items {
-
-    println!(
-        "{}",
-        service.unit_name
+    print_services(
+        "VISIBLE INICIAL",
+        visible
     );
 
-}
 
-let tags = TagRepository::new(&db);
-
-
-tags.create("game").unwrap();
-
-
-let tag = tags
-    .find_by_name("game")
-    .unwrap()
+    //
+    // HIDE
+    //
+    hide_service(
+        &repo,
+        "hermes.service"
+    )
     .unwrap();
 
 
-repo.add_tag(
-    2,
-    tag.id
-).unwrap();
+    let visible = repo
+        .find_visible()
+        .unwrap();
 
-
-let service_tags =
-    repo.find_tags(2)
+    let hidden = repo
+        .find_hidden()
         .unwrap();
 
 
-println!("{:?}", service_tags);
+    print_services(
+        "DESPUES DE HIDE - VISIBLE",
+        visible
+    );
+
+    print_services(
+        "DESPUES DE HIDE - HIDDEN",
+        hidden
+    );
+
+
+    //
+    // SHOW
+    //
+    show_service(
+        &repo,
+        "hermes.service"
+    )
+    .unwrap();
+
+
+    let visible = repo
+        .find_visible()
+        .unwrap();
+
+
+    print_services(
+        "DESPUES DE SHOW",
+        visible
+    );
+
+
+    //
+    // REMOVE
+    //
+    remove_service(
+        &repo,
+        "hermes.service"
+    )
+    .unwrap();
+
+
+    let all = repo
+        .find_all()
+        .unwrap();
+
+
+    print_services(
+        "DESPUES DE REMOVE",
+        all
+    );
 
 }

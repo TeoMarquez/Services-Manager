@@ -143,6 +143,25 @@ impl<'a> ServiceRepository<'a> {
         )
 
     }
+    pub fn find_visible(
+        &self
+    ) -> Result<Vec<Service>> {
+
+        self.find_where(
+            "visible = 1"
+        )
+
+    }
+    pub fn find_hidden(
+        &self
+    ) -> Result<Vec<Service>> {
+
+        self.find_where(
+            "visible = 0"
+        )
+
+    }
+    
     pub fn find_system(
         &self
     ) -> Result<Vec<Service>> {
@@ -296,6 +315,46 @@ impl<'a> ServiceRepository<'a> {
 
         Ok((services, total))
     }
+
+    pub fn delete(
+        &self,
+        unit_name: &str
+    ) -> Result<()> {
+
+        self.conn.execute(
+            "
+            DELETE FROM services
+            WHERE unit_name = ?
+            ",
+            [unit_name],
+        )?;
+
+        Ok(())
+    }
+
+    pub fn set_visible(
+        &self,
+        unit_name: &str,
+        visible: bool
+    ) -> Result<()> {
+
+        self.conn.execute(
+            "
+            UPDATE services
+            SET visible = ?
+            WHERE unit_name = ?
+            ",
+            params![
+                if visible { 1 } else { 0 },
+                unit_name
+            ],
+        )?;
+
+        Ok(())
+    }
+
+
+    // start managing tags 
 
     pub fn add_tag(
         &self,

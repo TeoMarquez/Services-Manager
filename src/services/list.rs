@@ -10,7 +10,10 @@ pub enum ServiceFilter {
     Missing,
     System,
     User,
+    Visible,
+    Hidden
 }
+
 #[derive(Debug)]
 pub struct Page<T> {
     pub items: Vec<T>,
@@ -47,6 +50,14 @@ pub fn list_services(
             repository.find_user()
         },
 
+        ServiceFilter::Visible => {
+            repository.find_visible()
+        },
+        
+        ServiceFilter::Hidden => {
+            repository.find_hidden()
+        },
+
     }
     .expect("Could not list services")
 
@@ -67,7 +78,8 @@ pub fn list_page(
         ServiceFilter::Missing => "present = 0",
         ServiceFilter::System => "system_service = 1",
         ServiceFilter::User => "system_service = 0",
-
+        ServiceFilter::Visible => "visible = 1",
+        ServiceFilter::Hidden => "visible = 0",
     };
 
 
