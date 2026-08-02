@@ -1,0 +1,11 @@
+[
+    {
+        "unit_name": "telegram-bot.service"
+    },
+    {
+        "unit_name": "minecraft.service"
+    },
+    {
+        "unit_name": "hermes.service"
+    }
+]
