@@ -66,13 +66,26 @@ for service in page.items {
 let tags = TagRepository::new(&db);
 
 
-tags.create(
-    "minecraft"
-);
+tags.create("game").unwrap();
 
-for tag in tags.find_all().unwrap() {
 
-    println!("{:?}", tag);
+let tag = tags
+    .find_by_name("game")
+    .unwrap()
+    .unwrap();
 
-}
+
+repo.add_tag(
+    2,
+    tag.id
+).unwrap();
+
+
+let service_tags =
+    repo.find_tags(2)
+        .unwrap();
+
+
+println!("{:?}", service_tags);
+
 }

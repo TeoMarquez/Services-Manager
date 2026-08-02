@@ -1,6 +1,8 @@
 use rusqlite::{Connection, Result, params};
-use super::models::Service;
-
+use super::models::{
+    Service,
+    Tag
+};
 pub struct ServiceRepository<'a> {
     conn: &'a Connection,
 }
@@ -295,4 +297,64 @@ impl<'a> ServiceRepository<'a> {
         Ok((services, total))
     }
 
+    pub fn add_tag(
+        &self,
+        service_id: i64,
+        tag_id: i64
+    ) -> Result<()> {
+
+        self.conn.execute(
+            "
+            INSERT OR IGNORE INTO service_tags
+            (
+                service_id,
+                tag_id
+            )
+            VALUES (?, ?)
+            ",
+            params![
+                service_id,
+                tag_id
+            ],
+        )?;
+
+        Ok(())
+    }
+
+    pub fn find_tags(
+        &self,
+        service_id: i64
+    ) -> Result<Vec<Tag>> {
+
+        let mut stmt = self.conn.prepare(
+            "
+            SELECT
+                t.id,
+                t.name
+            FROM tags t
+            INNER JOIN service_tags st
+                ON st.tag_id = t.id
+            WHERE st.service_id = ?
+            ORDER BY t.id
+            "
+        )?;
+
+
+        let tags = stmt
+            .query_map(
+                [service_id],
+                |row| {
+
+                    Ok(Tag {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                    })
+
+                }
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+
+
+        Ok(tags)
+    }
 }
