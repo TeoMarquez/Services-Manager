@@ -9,7 +9,7 @@ use db::{
 };
 
 use services::list::{
-    list_services,
+    list_page,  
     ServiceFilter
 };
 
@@ -48,6 +48,25 @@ use services::list::list_services;
     let services =
     list_services(&repo, ServiceFilter::All);
 
+let page = list_page(
+    &repo,
+    ServiceFilter::All,
+    2,
+    2
+);
+
+
+println!("{:?}", page);
+
+
+for service in page.items {
+
+    println!(
+        "{}",
+        service.unit_name
+    );
+
+}
 
 for service in services {
 

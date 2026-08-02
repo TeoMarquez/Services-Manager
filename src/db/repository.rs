@@ -213,5 +213,86 @@ impl<'a> ServiceRepository<'a> {
 
     }
 
+    pub fn find_page(
+        &self,
+        condition: &str,
+        page: u32,
+        per_page: u32,
+    ) -> Result<(Vec<Service>, u32)> {
+
+        let offset = (page - 1) * per_page;
+
+
+        let count_query = format!(
+            "
+            SELECT COUNT(*)
+            FROM services
+            WHERE {}
+            ",
+            condition
+        );
+
+
+        let total: u32 = self.conn.query_row(
+            &count_query,
+            [],
+            |row| row.get(0)
+        )?;
+
+
+        let query = format!(
+            "
+            SELECT
+                id,
+                unit_name,
+                alias,
+                description,
+                origin,
+                visible,
+                system_service,
+                last_seen,
+                present
+            FROM services
+            WHERE {}
+            ORDER BY id
+            LIMIT ?
+            OFFSET ?
+            ",
+            condition
+        );
+
+
+        let mut stmt = self.conn.prepare(&query)?;
+
+
+        let services = stmt
+            .query_map(
+                [
+                    per_page as i64,
+                    offset as i64
+                ],
+                |row| {
+
+                    Ok(Service {
+
+                        id: row.get(0)?,
+                        unit_name: row.get(1)?,
+                        alias: row.get(2)?,
+                        description: row.get(3)?,
+                        origin: row.get(4)?,
+                        visible: row.get::<_, i64>(5)? != 0,
+                        system_service: row.get::<_, i64>(6)? != 0,
+                        last_seen: row.get(7)?,
+                        present: row.get::<_, i64>(8)? != 0,
+
+                    })
+
+                }
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+
+
+        Ok((services, total))
+    }
 
 }
