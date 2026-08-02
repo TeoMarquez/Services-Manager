@@ -8,6 +8,11 @@ use db::{
     ServiceRepository
 };
 
+use services::list::{
+    list_services,
+    ServiceFilter
+};
+
 use system::{
     MockSystem
 };
@@ -23,7 +28,7 @@ fn main() {
 
 
     let repo = ServiceRepository::new(&db);
-
+use services::list::list_services;
 
     let system =
         MockSystem::new();
@@ -40,4 +45,17 @@ fn main() {
 
 
     println!("{:?}", service);
+    let services =
+    list_services(&repo, ServiceFilter::All);
+
+
+for service in services {
+
+    println!(
+        "{} - present:{}",
+        service.unit_name,
+        service.present
+    );
+
+}
 }
