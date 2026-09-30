@@ -1,324 +1,112 @@
 # Services Manager
 
-## Descripción
+**Gestiona y consulta servicios de Linux mediante una API REST**, con SQLite para guardar inventario y metadata, y `systemd` para descubrir y controlar las unidades reales.
 
-Services Manager es un gestor de servicios del sistema operativo diseñado para centralizar la administración, persistencia y consulta de servicios.
+La API permite a un bot, script o aplicación externa descubrir servicios, buscarlos, organizarlos con tags, actualizar alias y descripciones, y consultar o cambiar su estado. El sistema operativo es la fuente de verdad: para iniciar o detener una unidad, primero se realiza y verifica la operación en systemd y luego se actualiza la base de datos.
 
-El proyecto mantiene una separación clara entre:
+> La integración real está pensada para Linux con systemd. En Docker se pueden ejecutar las pruebas, pero el contenedor de desarrollo no controla el systemd del host.
 
-* La persistencia de información.
-* La lógica de gestión de servicios.
-* La comunicación con el sistema operativo.
-* Las interfaces de interacción.
+## Qué puedes hacer
 
-El objetivo principal es proporcionar una capa de gestión independiente que pueda ser utilizada por distintas interfaces externas sin acoplar la lógica interna a una implementación concreta.
+- Descubrir unidades systemd progresivamente y reanudar el ciclo si el proceso se interrumpe.
+- Buscar y filtrar servicios por nombre, descripción, alias, presencia, visibilidad y tags.
+- Consultar el estado activo directamente desde systemd.
+- Iniciar, detener y habilitar o deshabilitar servicios.
+- Organizar servicios con tags y controlar su visibilidad en el gestor.
+- Crear una plantilla `.service`, recargar systemd y descubrir la nueva unidad.
+- Administrar la API con un token bearer y usar SQLite como almacenamiento persistente.
 
----
+## Inicio rápido en Linux
 
-# Arquitectura
+Necesitas Rust/Cargo para compilar. Desde la carpeta del proyecto:
 
-El proyecto está dividido en módulos con responsabilidades independientes:
-
-```
-services-manager
-
-├── db
-│   ├── models
-│   └── repositories
-│
-├── services
-│   ├── sync
-│   ├── visibility
-│   ├── deletion
-│   ├── tagging
-│   └── querying
-│
-├── system
-│   └── provider
-│
-└── cli
-    └── testing interface
+```sh
+./build.sh
+./run.sh
 ```
 
----
+Al primer inicio se genera un token y se guarda en `.env`; por defecto se muestra en pantalla. La API escucha en `http://127.0.0.1:3000`. La base de datos se crea en `data/services.db`.
 
-# Módulo DB
+Para que el token no aparezca en la salida del proceso:
 
-Responsable de la persistencia y consulta de información.
-
-Incluye:
-
-* Modelos de datos.
-* Repositorios.
-* Consultas SQL.
-* Relaciones entre entidades.
-
-Actualmente utiliza SQLite mediante `rusqlite`.
-
-## Responsabilidades
-
-La capa de base de datos administra:
-
-* Servicios registrados.
-* Estado de presencia.
-* Visibilidad.
-* Metadata asociada.
-* Tags y relaciones entre servicios.
-
-## No es responsabilidad de la DB:
-
-* Ejecutar servicios.
-* Modificar el sistema operativo.
-* Conocer interfaces externas.
-* Implementar lógica de presentación.
-
-La base de datos únicamente representa el estado persistido del gestor.
-
----
-
-# Módulo System Provider
-
-Este módulo representa la comunicación con el sistema operativo.
-
-Su responsabilidad es abstraer el proveedor real de servicios.
-
-Actualmente existe:
-
-```
-MockSystem
+```sh
+./run.sh --silent-token
 ```
 
-utilizado para pruebas y desarrollo.
+El token sigue guardado en `.env`. Para configurar o rotar el token explícitamente:
 
-La implementación futura reemplazará esta abstracción por un proveedor real basado en el sistema de servicios correspondiente.
-
-La capa superior no debe depender de una implementación concreta, sino de las capacidades ofrecidas por este módulo.
-
----
-
-# Service Manager Core
-
-Es el núcleo lógico del proyecto.
-
-Su responsabilidad es coordinar:
-
-```
-Sistema operativo
-        │
-        ▼
-Service Manager
-        │
-        ▼
-Base de datos
+```sh
+./run.sh --token 'un-token-seguro-de-al-menos-32-caracteres' --overwrite-token
 ```
 
-El gestor mantiene consistencia entre el estado real del sistema y el estado persistido.
+Para cambiar el puerto actual y guardarlo para próximos inicios:
 
-Ejemplos:
-
-* Sincronizar servicios detectados.
-* Registrar nuevos servicios.
-* Marcar servicios ausentes.
-* Actualizar visibilidad.
-* Gestionar etiquetas.
-* Ejecutar consultas filtradas.
-
----
-
-# Funcionalidades implementadas
-
-## Sincronización
-
-Permite comparar los servicios existentes en el sistema con los registrados en la base de datos.
-
-Actualmente permite:
-
-* Detectar nuevos servicios.
-* Registrar servicios encontrados.
-* Mantener información de presencia.
-
----
-
-## Gestión de visibilidad
-
-Permite controlar qué servicios aparecen dentro de las consultas del gestor.
-
-Operaciones disponibles:
-
-* Mostrar servicio.
-* Ocultar servicio.
-
-La visibilidad es metadata propia del gestor y no modifica el servicio real del sistema operativo.
-
----
-
-## Eliminación
-
-Permite eliminar registros de servicios gestionados.
-
-La operación actualmente trabaja sobre la capa persistente.
-
-La futura integración con el proveedor del sistema permitirá sincronizar esta acción con la eliminación real del servicio.
-
----
-
-## Sistema de etiquetas
-
-Los servicios pueden clasificarse mediante tags.
-
-Implementado:
-
-* Crear etiquetas.
-* Listar etiquetas.
-* Asociar etiquetas a servicios.
-* Eliminar asociaciones.
-* Consultar etiquetas de un servicio.
-* Buscar servicios mediante etiquetas.
-
-Modelo:
-
-```
-services
-
-    │
-    │
-service_tags
-    │
-    │
-tags
+```sh
+./run.sh --port 8080
 ```
 
----
+No publiques la API en una interfaz de red externa sin configurar conscientemente el bind, proteger el acceso y limitar quién puede alcanzar el proceso. El bind predeterminado es loopback.
 
-## Consultas y filtros
+## Probar la API
 
-Se implementó una capa de construcción de consultas para evitar duplicación de lógica.
+Todas las rutas requieren `Authorization: Bearer <token>`. Puedes leer el token guardado desde la raíz del repositorio:
 
-Permite filtrar servicios por:
-
-* Todos.
-* Presentes.
-* Ausentes.
-* Servicios del sistema.
-* Servicios de usuario.
-* Visibles.
-* Ocultos.
-* Etiquetas.
-
-La generación de filtros está separada de la ejecución SQL para mantener las responsabilidades divididas.
-
----
-
-# CLI
-
-La CLI incluida actualmente es una herramienta de prueba y administración manual.
-
-No representa la interfaz final del sistema.
-
-Permite verificar:
-
-* Sincronización.
-* Listado.
-* Visibilidad.
-* Eliminación.
-* Gestión de tags.
-
-Su función principal es validar el comportamiento del núcleo durante el desarrollo.
-
----
-
-# Decisiones arquitectónicas
-
-## Separación de responsabilidades
-
-Cada módulo tiene una responsabilidad concreta:
-
-```
-DB
-↓
-Persistencia
-
-System Provider
-↓
-Comunicación con el sistema operativo
-
-Service Manager
-↓
-Reglas y coordinación
-
-Interfaces externas
-↓
-Interacción con usuarios o aplicaciones
+```sh
+TOKEN=$(sed -n 's/^SERVICES_MANAGER_API_TOKEN=//p' .env)
+API=http://127.0.0.1:3000/api/v1
 ```
 
----
+Consultar salud y buscar servicios:
 
-## El núcleo no conoce consumidores externos
+```sh
+curl -H "Authorization: Bearer $TOKEN" "$API/health"
+curl -H "Authorization: Bearer $TOKEN" "$API/services?search=worker&page=1&per_page=25"
+```
 
-Services Manager no depende de ninguna interfaz concreta.
+Procesar una página de discovery y consultar el detalle/estado vivo de una unidad:
 
-No conoce:
+```sh
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{}' "$API/discovery"
+curl -H "Authorization: Bearer $TOKEN" "$API/services/worker.service"
+```
 
-* Aplicaciones cliente.
-* Interfaces gráficas.
-* APIs.
-* Automatizaciones externas.
+En el detalle, `active` se obtiene de systemd al momento de la petición. Alias y descripción se pueden actualizar así:
 
-Cualquier consumidor debe implementar su propia capa de comunicación y transformación de datos.
+```sh
+curl -X PUT -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"alias":"worker principal"}' \
+  "$API/services/worker.service/alias"
+curl -X PUT -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"description":"Procesa tareas en segundo plano"}' \
+  "$API/services/worker.service/description"
+```
 
----
+Ambas actualizaciones responden `204 No Content`. La lista completa de rutas y atributos está en [docs/API.md](docs/API.md).
 
-## Evitar acoplamiento
+## Instalación y permisos
 
-Las capas superiores no deben depender de detalles internos.
+La API consulta y controla systemd con `systemctl`. Para crear archivos bajo `/etc/systemd/system` y ejecutar `systemctl daemon-reload`, el proceso necesita los permisos correspondientes. Si se ejecuta como servicio systemd, configura usuario, permisos, reinicio y manejo del token para tu instalación.
 
-Ejemplo:
+La ruta del directorio de plantillas se configura mediante la API y por defecto es `/etc/systemd/system`. Las plantillas creadas incluyen nombre y descripción, **pero no `ExecStart`**: complétalo antes de intentar iniciar la unidad. La guía de operación y las restricciones del contrato están en [docs/API.md](docs/API.md) y [docs/SYSTEM_CONTROL.md](docs/SYSTEM_CONTROL.md).
 
-Cambiar SQLite por otra base de datos no debería modificar la lógica de gestión.
+## Desarrollo y pruebas
 
-Cambiar el proveedor del sistema operativo no debería modificar consultas, tags o reglas del gestor.
+Los scripts `build.sh`/`run.sh` son para Linux y `build.bat`/`run.bat` para Windows. También puedes usar Docker para un entorno de desarrollo reproducible:
 
----
+```sh
+docker compose build dev
+docker compose run --rm dev cargo test --locked
+docker compose run --rm dev cargo check --locked
+```
 
-# Estado actual
+El servicio `dev` usa proveedores de prueba y no requiere privilegios. El perfil Docker de API tampoco comparte el manager systemd del host; valida el servidor, no el control real de unidades.
 
-## Etapa completada
+## Documentación
 
-* Modelo inicial de datos.
-* Repositorios.
-* Sincronización.
-* Gestión de presencia.
-* Gestión de visibilidad.
-* Eliminación.
-* Sistema de tags.
-* Filtros de consulta.
-* Paginación.
-* CLI interactiva de pruebas.
-
----
-
-# Próximas etapas
-
-## Provider real del sistema
-
-Implementación de operaciones reales:
-
-* Descubrimiento de servicios.
-* Creación.
-* Modificación.
-* Eliminación.
-* Consulta de estado.
-
----
-
-## Capa de comunicación externa
-
-Definición de una interfaz estable para permitir que otros sistemas consuman el gestor sin acceder directamente a sus componentes internos.
-
----
-
-# Principio general del proyecto
-
-Services Manager debe actuar como una unidad independiente de gestión de servicios.
-
-La arquitectura busca que cada componente pueda evolucionar sin arrastrar cambios innecesarios sobre el resto del sistema.
+- [Contrato y rutas de API](docs/API.md)
+- [Discovery y reanudación](docs/DISCOVERY.md)
+- [Control systemd y consistencia](docs/SYSTEM_CONTROL.md)
+- [Pruebas](docs/TESTING.md)
+- [Entorno Docker](docs/DOCKER.md)
+- [Decisiones de arquitectura](docs/ARCHITECTURE_DECISIONS.md)
