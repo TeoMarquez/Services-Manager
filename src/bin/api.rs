@@ -5,6 +5,7 @@ use services_manager::{api, db::create_connection, system::SystemdProvider, toke
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt::init();
+    set_project_root_from_executable();
     let bind: SocketAddr = env::var("SERVICES_MANAGER_API_BIND")
         .unwrap_or_else(|_| "127.0.0.1:3000".to_owned())
         .parse()?;
@@ -25,4 +26,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
     eprintln!("Services Manager API listening on {bind}");
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+fn set_project_root_from_executable() {
+    let Ok(executable) = env::current_exe() else {
+        return;
+    };
+    let Some(executable_dir) = executable.parent() else {
+        return;
+    };
+    if let Some(root) = executable_dir
+        .ancestors()
+        .find(|candidate| candidate.join("migrations").is_dir())
+    {
+        let _ = env::set_current_dir(root);
+    }
 }

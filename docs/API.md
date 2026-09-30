@@ -52,13 +52,13 @@ La plantilla creada contiene `[Unit]`, la descripción y una sección `[Service]
 
 El binario lee primero `SERVICES_MANAGER_API_TOKEN` desde `.env`. Si no hay token guardado, usa la variable de entorno si está configurada o genera uno criptográficamente aleatorio, lo guarda en `.env` y lo imprime al iniciar. `.env` queda ignorado por Git y en Unix se escribe con permisos `0600`.
 
-Opciones de ejecución: `--token VALOR` usa/guarda un token inicial; `--token ""` genera uno si no hay uno persistido; si `.env` ya tiene otro secreto, se requiere `--overwrite-token`. Ese flag guarda el token dado por `--token` o genera uno nuevo si no se pasó valor. `--silent-token` evita imprimirlo. Por ejemplo, `./target/release/api --overwrite-token --silent-token` rota el token y lo deja solo en `.env`.
+Opciones de ejecución: `--token VALOR` usa/guarda un token inicial; `--token ""` genera uno si no hay uno persistido; si `.env` ya tiene otro secreto, se requiere `--overwrite-token`. Ese flag guarda el token dado por `--token` o genera uno nuevo si no se pasó valor. El token se imprime al iniciar, salvo que se pase `--silent-token`. Por ejemplo, `./run.sh --overwrite-token --silent-token` rota el token y lo deja en `.env` sin imprimirlo.
 
 Un token suministrado por argumento puede quedar visible en historial del shell o lista de procesos. Para pruebas, es preferible dejar que se genere y se guarde; para configurar uno manualmente, proteger el historial y los permisos del usuario.
 
 El binario escucha en `127.0.0.1:3000` por defecto; `SERVICES_MANAGER_API_BIND` puede cambiarlo. La autenticación es un único token compartido, sin roles por operación. Compose publica el puerto en loopback del host, pero el contenedor no tiene acceso al systemd del host: sus rutas de discovery/control no validan el proveedor real.
 
-`.env`, `migrations/` y `data/` son relativos al directorio actual. Ejecutar desde la raíz de despliegue, mantener `migrations/` junto al binario y dar permisos de escritura al usuario sobre `.env` y `data/`.
+`.env`, `migrations/` y `data/` se mantienen relativos a la raíz del proyecto. Los scripts `run.bat` y `run.sh` cambian a esa raíz antes de lanzar el binario y reenvían los argumentos recibidos. El propio binario también busca la carpeta `migrations/` en los directorios antecesores de su ejecutable y usa esa raíz como directorio actual. Mantener `migrations/` junto a la raíz de despliegue y dar permisos de escritura al usuario sobre `.env` y `data/`.
 
 ## Contratos aún necesarios
 
