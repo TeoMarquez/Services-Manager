@@ -15,4 +15,4 @@ Esta carpeta es el punto de entrada para retomar el trabajo de Services Manager.
 
 ## Prioridad inmediata
 
-Prioridad: probar el proveedor systemd en Linux real; cubrir fallos de verificación/rollback; fijar timeouts y permisos de control; y compartir los casos de uso entre CLI/API. El estado y los pendientes están en [Estado actual](CURRENT_STATE.md), [Plan](DEVELOPMENT_PLAN.md), [API](API.md) y [Decisiones](ARCHITECTURE_DECISIONS.md).
+Prioridad: validar token `.env` y creación/recarga/discovery de plantillas en Linux real; cubrir fallos de verificación/rollback; fijar timeouts/permisos; y compartir casos de uso CLI/API. El estado y pendientes están en [Estado actual](CURRENT_STATE.md), [Plan](DEVELOPMENT_PLAN.md), [API](API.md) y [Decisiones](ARCHITECTURE_DECISIONS.md).

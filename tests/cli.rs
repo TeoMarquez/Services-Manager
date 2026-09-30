@@ -35,6 +35,11 @@ fn test_workspace() -> std::path::PathBuf {
     )
     .unwrap();
     fs::write(
+        root.join("migrations/05_manager_settings.sql"),
+        include_str!("../migrations/05_manager_settings.sql"),
+    )
+    .unwrap();
+    fs::write(
         root.join("mock/systemd.json"),
         include_str!("../mock/systemd.json"),
     )

@@ -4,7 +4,7 @@ use thiserror::Error;
 
 pub const DEFAULT_BATCH_SIZE: usize = 100;
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct SyncReport {
     pub discovered: usize,
     pub added: usize,

@@ -32,6 +32,7 @@ El trait `SystemProvider` separa consumidor y proveedor. `MockSystem` soporta di
 - API: REST/JSON se implementa como supuesto inicial; faltan cerrar modelo de error, límites, concurrencia y seguridad operacional.
 - Control: el modelo actual representa enabled/disabled; decidir si se amplía para masked/runtime/static y fijar permisos/timeouts.
 - Reset: la ruta actual limpia servicios, tags y checkpoint, sin tocar OS; confirmar si API requiere protección adicional contra llamadas accidentales.
+- Creación: el API genera plantillas unit file sin `ExecStart` (según requisito); el archivo se crea sin sobrescribir, se hace daemon-reload y discovery. La ruta configurada debe pertenecer al unit search path de systemd para que el proveedor la encuentre.
 - Modelo de discovery: cursor/snapshot implementados; evaluar tamaño del cursor con inventario real y mejorar concurrencia/ciclo abortado.
 - Persistencia del protocolo de operaciones para recuperación tras caída del proceso.
 - Permisos mínimos/roles, límites de exposición, rate limiting y concurrencia de API.
@@ -43,5 +44,6 @@ El trait `SystemProvider` separa consumidor y proveedor. `MockSystem` soporta di
 - API REST/JSON versionada; bind local `127.0.0.1` por defecto.
 - Proveedor Linux basado en systemd, coherente con la fixture `mock/systemd.json`.
 - `reset` limitado a datos administrados por Services Manager; nunca resetea unidades del SO.
+- Un solo token bearer compartido, guardado en `.env`; se genera si falta y solo rota al solicitar `--overwrite-token`.
 
 No exponer la API en red hasta cerrar autorización por operación, permisos/timeouts y validar el handshake de `SYSTEM_CONTROL.md` con systemd real.

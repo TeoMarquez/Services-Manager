@@ -2,10 +2,10 @@
 
 ## Estado ejecutable
 
-- `cargo test --offline`: 18 tests unitarios y 1 test CLI pasan en Windows.
-- `docker compose run --rm dev cargo test --locked`: la misma suite pasa en el contenedor Linux.
+- `cargo test --offline`: 27 tests unitarios y 1 test CLI pasan localmente en Windows.
+- `docker compose run --rm dev cargo test --locked`: la misma suite pasa en Docker Linux.
 - Los tests de control usan proveedor falso; no han ejercitado `systemctl` real.
-- Ya están cubiertos discovery por páginas/reanudación, búsqueda/paginación, migración idempotente, acceso bearer, endpoints de lectura/reset/discovery/start y control éxito/error OS/fallo DB con rollback exitoso.
+- Ya están cubiertos discovery por páginas/reanudación, búsqueda/paginación, migración idempotente, token/.env, acceso bearer, endpoints de lectura/reset/discovery/start/configuración/creación de unit file y control éxito/error OS/fallo DB con rollback exitoso.
 
 ## Capas
 
@@ -15,6 +15,8 @@
 - Construcción de filtros, parámetros, paginación y resultados vacíos.
 - Tags: creación idempotente, asociación duplicada, eliminación y cascada.
 - Control coordinado: orden OS → verificación → DB y compensación ante fallo.
+- Token: generación, persistencia, prioridad de `.env` y rotación explícita.
+- Creación: validación del nombre/descripcion, escritura de plantilla, rollback tras fallo de daemon-reload y discovery posterior usando proveedor falso.
 - Pendiente: verificación que falla/desacuerda, operación OS parcialmente aplicada, rollback fallido, indeterminación, llamadas concurrentes/idempotencia y timeout.
 
 ### Integración con SQLite

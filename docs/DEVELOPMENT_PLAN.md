@@ -65,14 +65,14 @@
 - Añadir límites de concurrencia, timeout, autorización y protección ante solicitudes repetidas.
 - Cubrir contrato y flujos de éxito/compensación con pruebas.
 
-**Salida:** API REST/JSON con token bearer y rutas de discovery, búsqueda, visibilidad, tags, reset, start/stop y startup-mode. El contrato aún requiere endurecer autorización/concurrencia, timeouts y cobertura; la prueba de start usa proveedor falso.
+**Salida:** API REST/JSON con bearer token administrado en `.env`, rutas de discovery, búsqueda, visibilidad, tags, reset, start/stop, startup-mode, creación de plantillas `.service` y configuración de directorio. Contrato aún requiere endurecer autorización/concurrencia y timeouts; pruebas de creación usan directorio/provider temporales, no systemd real.
 
 ## Secuencia inmediata
 
-1. Validar `SystemdProvider` y comandos `systemctl` en Linux con systemd real; precisar permisos y timeouts.
-2. Completar tests del coordinador para verificación, rollback fallido, parcialidad, indeterminación e idempotencia; cubrir todas las rutas de control API.
-3. Extraer casos de uso compartidos para CLI/API y sumar subcomandos no interactivos donde correspondan.
-4. Cerrar contrato de seguridad y concurrencia de la API, discovery/reset repetible y recuperación ante caída OS/DB.
+1. Validar generación, daemon-reload y discovery en Linux real; completar `ExecStart` manualmente en las plantillas antes de iniciar un servicio.
+2. Completar tests del coordinador para verificación, rollback fallido, parcialidad, indeterminación e idempotencia; cubrir stop/startup-mode por API.
+3. Añadir timeouts y definir permisos de escritura/systemctl; revisar flujo `.env` en despliegue con usuario real.
+4. Extraer casos de uso compartidos para CLI/API y cerrar seguridad/concurrencia y recuperación ante caída OS/DB.
 
 ## Registro de avance
 
@@ -83,4 +83,6 @@
 - 2026-09-29: filtros de servicio se pueden combinar tipadamente; búsqueda escapa comodines y los valores van parametrizados. Migración idempotente y rollback atómico por trigger cubiertos.
 - 2026-09-29: añadidos `SystemdProvider`, coordinador OS → verificación → DB → compensación, migración 04 para estado operacional y rutas API start/stop/startup-mode. Tests cubren éxito, fallo OS, compensación tras fallo DB y ruta API start; `cargo test --offline` y Docker Linux pasan (18 unitarios + 1 CLI).
 - 2026-09-29: el proveedor systemd admite los códigos de salida de `is-enabled` para estados normales como `disabled` y conserva una instantánea del inventario en el cursor de discovery para que el ciclo no dependa de offsets sobre una lista cambiante.
-- Próximo: cubrir fallos de verificación/rollback e implementar timeouts; validar proveedor en Linux con systemd real; compartir casos de uso CLI/API y cerrar seguridad/concurrencia.
+- Próximo: cubrir fallos de verificación/rollback e implementar timeouts; validar generación/daemon-reload/discovery en Linux real; compartir casos de uso CLI/API y cerrar seguridad/concurrencia.
+- 2026-09-30: API token ahora puede generarse automáticamente o configurarse/rotarse por CLI; se persiste en `.env` ignorado por Git, se imprime al iniciar salvo `--silent-token`; migración 05 guarda directorio de unit files.
+- 2026-09-30: añadidas rutas para configurar el directorio de servicio y crear una plantilla `.service` sin `ExecStart`. Creación escribe sin sobrescribir, ejecuta `daemon-reload` y un discovery completo; suite local actual: 27 unitarios + 1 CLI.

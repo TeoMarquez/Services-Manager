@@ -29,6 +29,7 @@ La tabla singleton y una comparación del cursor al guardar una página evitan q
 - `sync_step(provider, repo, limit)` procesa una sola página y devuelve el checkpoint/progreso.
 - `sync(provider, repo)` itera páginas hasta completar y devuelve el reporte acumulado.
 - La CLI usa `sync`; `POST /api/v1/discovery` usa `sync_step` y responde progreso de una página por petición.
+- La creación API de una plantilla `.service` llama a `systemctl daemon-reload` y luego ejecuta `sync` completo; si discovery no observa el nombre recién creado, la API informa el error.
 
 ## Límites actuales
 

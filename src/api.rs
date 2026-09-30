@@ -12,9 +12,10 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    db::{ServiceRepository, TagRepository},
+    db::{ServiceRepository, SettingsRepository, TagRepository},
     services::{
         control::{self, ControlError},
+        create::{self, CreateServiceError, CreatedService},
         list::{ListError, ServiceQuery, list_page},
         sync::{SyncError, sync_step},
     },
@@ -50,7 +51,11 @@ pub fn router(state: ApiState) -> Router {
     let routes = Router::new()
         .route("/api/v1/health", get(health))
         .route("/api/v1/discovery", post(discover))
-        .route("/api/v1/services", get(list_services))
+        .route("/api/v1/services", get(list_services).post(create_service))
+        .route(
+            "/api/v1/settings/service-directory",
+            get(get_service_directory).put(set_service_directory),
+        )
         .route(
             "/api/v1/services/{unit_name}/visibility",
             put(set_visibility),
@@ -176,6 +181,26 @@ impl From<ControlError> for ApiError {
     }
 }
 
+impl From<CreateServiceError> for ApiError {
+    fn from(error: CreateServiceError) -> Self {
+        let status = match error {
+            CreateServiceError::InvalidName | CreateServiceError::InvalidDescription => {
+                StatusCode::BAD_REQUEST
+            }
+            CreateServiceError::AlreadyExists(_) => StatusCode::CONFLICT,
+            CreateServiceError::AlreadyPresent(_) => StatusCode::CONFLICT,
+            CreateServiceError::Discovery { .. }
+            | CreateServiceError::NotDiscovered { .. }
+            | CreateServiceError::Provider(_)
+            | CreateServiceError::Reload { .. } => StatusCode::BAD_GATEWAY,
+            CreateServiceError::Io(_) | CreateServiceError::Database(_) => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
+        };
+        Self::new(status, error.to_string())
+    }
+}
+
 fn lock_database(state: &ApiState) -> Result<std::sync::MutexGuard<'_, Connection>, ApiError> {
     state
         .connection
@@ -217,6 +242,86 @@ async fn list_services(
         params.per_page.unwrap_or(25),
     )?;
     Ok(Json(page))
+}
+
+#[derive(Debug, Serialize)]
+struct ServiceDirectoryResponse {
+    path: String,
+}
+
+async fn get_service_directory(
+    State(state): State<ApiState>,
+) -> Result<Json<ServiceDirectoryResponse>, ApiError> {
+    let conn = lock_database(&state)?;
+    let path = SettingsRepository::new(&conn)
+        .service_directory()
+        .map_err(ApiError::internal)?;
+    Ok(Json(ServiceDirectoryResponse {
+        path: path.to_string_lossy().into_owned(),
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+struct SetServiceDirectoryRequest {
+    path: String,
+}
+
+async fn set_service_directory(
+    State(state): State<ApiState>,
+    Json(request): Json<SetServiceDirectoryRequest>,
+) -> Result<Json<ServiceDirectoryResponse>, ApiError> {
+    let path = std::path::PathBuf::from(request.path.trim());
+    if !path.is_absolute() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "service directory must be an absolute path",
+        ));
+    }
+    let metadata = std::fs::metadata(&path).map_err(ApiError::internal)?;
+    if !metadata.is_dir() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "service directory must already exist and be a directory",
+        ));
+    }
+    let conn = lock_database(&state)?;
+    SettingsRepository::new(&conn)
+        .set_service_directory(&path)
+        .map_err(ApiError::internal)?;
+    Ok(Json(ServiceDirectoryResponse {
+        path: path.to_string_lossy().into_owned(),
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateServiceRequest {
+    name: String,
+    description: String,
+}
+
+async fn create_service(
+    State(state): State<ApiState>,
+    Json(request): Json<CreateServiceRequest>,
+) -> Result<(StatusCode, Json<CreatedService>), ApiError> {
+    let connection = Arc::clone(&state.connection);
+    let provider = Arc::clone(&state.provider);
+    let result = tokio::task::spawn_blocking(move || {
+        let conn = connection
+            .lock()
+            .map_err(|_| rusqlite::Error::InvalidQuery)?;
+        let repository = ServiceRepository::new(&conn);
+        let directory = SettingsRepository::new(&conn).service_directory()?;
+        create::create_service_and_discover(
+            provider.as_ref(),
+            &repository,
+            &directory,
+            &request.name,
+            &request.description,
+        )
+    })
+    .await
+    .map_err(ApiError::internal)??;
+    Ok((StatusCode::CREATED, Json(result)))
 }
 
 #[derive(Debug, Deserialize)]
@@ -463,10 +568,20 @@ mod tests {
             _: usize,
         ) -> Result<crate::system::ServicePage, crate::system::SystemProviderError> {
             Ok(crate::system::ServicePage {
-                services: vec![],
+                services: vec![
+                    crate::system::SystemService {
+                        unit_name: "demo.service".to_owned(),
+                    },
+                    crate::system::SystemService {
+                        unit_name: "generated.service".to_owned(),
+                    },
+                ],
                 next_cursor: None,
                 complete: true,
             })
+        }
+        fn reload_units(&self) -> Result<(), crate::system::SystemProviderError> {
+            Ok(())
         }
         fn operational_state(
             &self,
@@ -629,6 +744,77 @@ mod tests {
             })
             .unwrap();
         assert_eq!(active, 1);
+    }
+
+    #[tokio::test]
+    async fn create_service_endpoint_writes_file_and_runs_discovery() {
+        let conn = Connection::open_in_memory().unwrap();
+        crate::db::migrations::run(&conn);
+        let directory =
+            std::env::temp_dir().join(format!("api-create-service-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        SettingsRepository::new(&conn)
+            .set_service_directory(&directory)
+            .unwrap();
+        let initial = OperationalState {
+            active: false,
+            startup_mode: StartupMode::Disabled,
+        };
+        let state = ApiState::new(conn, ControlProvider(Mutex::new(initial)));
+        let connection = Arc::clone(&state.connection);
+        let response = router(state)
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/services")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"name":"generated","description":"Generated test unit"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert!(directory.join("generated.service").exists());
+        let connection = connection.lock().unwrap();
+        assert!(
+            ServiceRepository::new(&connection)
+                .find_by_unit_name("generated.service")
+                .unwrap()
+                .is_some()
+        );
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[tokio::test]
+    async fn service_directory_route_persists_absolute_directory() {
+        let conn = Connection::open_in_memory().unwrap();
+        crate::db::migrations::run(&conn);
+        let directory = std::env::temp_dir();
+        let state = ApiState::new(conn, crate::system::MockSystem::new());
+        let connection = Arc::clone(&state.connection);
+        let body = serde_json::json!({"path": directory.to_string_lossy()}).to_string();
+        let response = router(state)
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/api/v1/settings/service-directory")
+                    .header("content-type", "application/json")
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            SettingsRepository::new(&connection.lock().unwrap())
+                .service_directory()
+                .unwrap(),
+            directory
+        );
     }
 
     #[tokio::test]

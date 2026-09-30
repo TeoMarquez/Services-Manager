@@ -48,6 +48,10 @@ pub trait SystemProvider {
     ) -> Result<(), SystemProviderError> {
         Err(SystemProviderError::UnsupportedOperation)
     }
+
+    fn reload_units(&self) -> Result<(), SystemProviderError> {
+        Err(SystemProviderError::UnsupportedOperation)
+    }
 }
 
 #[derive(Debug, Error)]

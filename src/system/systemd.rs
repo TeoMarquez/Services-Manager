@@ -193,4 +193,8 @@ impl SystemProvider for SystemdProvider {
             unit_name,
         ])
     }
+
+    fn reload_units(&self) -> Result<(), SystemProviderError> {
+        self.run(&["daemon-reload"])
+    }
 }

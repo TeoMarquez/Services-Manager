@@ -9,6 +9,7 @@ pub fn run(conn: &Connection) {
         (2, "02_add_present.sql"),
         (3, "03_discovery_checkpoint.sql"),
         (4, "04_operational_state.sql"),
+        (5, "05_manager_settings.sql"),
     ];
 
     for (id, file) in migrations {
@@ -85,7 +86,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(migration_count, 4);
+        assert_eq!(migration_count, 5);
         assert_eq!(active, 0);
         assert_eq!(cursor, None);
     }
