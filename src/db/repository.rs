@@ -427,6 +427,14 @@ impl<'a> ServiceRepository<'a> {
         Ok(updated > 0)
     }
 
+    pub fn set_description(&self, unit_name: &str, description: &str) -> Result<bool> {
+        let updated = self.conn.execute(
+            "UPDATE services SET description = ? WHERE unit_name = ?",
+            params![description, unit_name],
+        )?;
+        Ok(updated > 0)
+    }
+
     pub fn save_operational_state(&self, unit_name: &str, state: OperationalState) -> Result<()> {
         let tx = self.conn.unchecked_transaction()?;
         let service_id: i64 = tx.query_row(

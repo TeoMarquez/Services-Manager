@@ -2,11 +2,11 @@
 
 ## Estado ejecutable
 
-- La última ejecución registrada antes de los cambios de alias/puerto pasó 27 tests unitarios y 1 test CLI localmente y en Docker Linux.
+- La última ejecución registrada pasó 28 tests unitarios y 1 test CLI con `cargo test --locked` en Windows.
 - Tras los cambios de alias/puerto, `cargo fmt --all -- --check` y `cargo check --locked --all-targets` pasan; la suite no se ha vuelto a ejecutar.
 - Los tests de control usan proveedor falso; no han ejercitado `systemctl` real.
 - La suite definida cubre discovery por páginas/reanudación, búsqueda/paginación, migración idempotente, token/.env, acceso bearer, endpoints de lectura/reset/discovery/start/configuración/creación de unit file y control éxito/error OS/fallo DB con rollback exitoso.
-- No hay tests para operaciones CRUD de tags ni para asignación de alias; tampoco para selección/persistencia de puerto. La asignación de alias recién se incorporó y necesita cobertura.
+- No hay tests para operaciones CRUD de tags, asignación de alias, detalle de servicio/estado activo o selección/persistencia de puerto. La ruta de descripción ya verifica respuesta y persistencia.
 
 ## Ubicación y organización
 
@@ -25,7 +25,7 @@
 - Control coordinado: orden OS → verificación → DB y compensación ante fallo.
 - Token: generación, persistencia, prioridad de `.env` y rotación explícita.
 - Puerto: agregar pruebas de precedencia CLI/entorno/`.env`, validación de rango y persistencia preservando el token y otras variables.
-- Alias: agregar pruebas de API por nombre e ID, alias inválido/servicio inexistente y búsqueda posterior por alias.
+- Alias/detalle: agregar pruebas de API por nombre e ID, alias inválido/servicio inexistente y búsqueda posterior; probar detalle con servicio activo/inactivo, servicio ausente y error del proveedor.
 - Creación: validación del nombre/descripcion, escritura de plantilla, rollback tras fallo de daemon-reload y discovery posterior usando proveedor falso.
 - Pendiente: verificación que falla/desacuerda, operación OS parcialmente aplicada, rollback fallido, indeterminación, llamadas concurrentes/idempotencia y timeout.
 

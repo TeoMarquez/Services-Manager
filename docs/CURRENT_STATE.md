@@ -15,14 +15,14 @@
 
 Al iniciar, el binario CLI crea la DB y repositorios, ejecuta `services::sync::sync` con `MockSystem` y después abre el menú. El binario API usa `SystemdProvider`. Discovery procesa páginas, persiste sus registros y checkpoint de cursor en una transacción por página, y reanuda tras error. Solo marca ausencias al guardar la última página del ciclo. Systemd guarda el snapshot de unit files en su cursor para mantener estable el inventario lógico de ese ciclo.
 
-La capa de consultas ofrece filtros combinables/paginación y búsqueda parametrizada por nombre, alias o descripción. La API REST implementa discovery incremental, consultas, alias, tags, visibilidad, reset, control operacional, creación de plantillas `.service` y configuración persistente del directorio. La CLI continúa en mock.
+La capa de consultas ofrece filtros combinables/paginación y búsqueda parametrizada por nombre, alias o descripción. La API REST implementa discovery incremental, consultas, detalle con estado `active` en vivo desde systemd, edición de alias/descripción, tags, visibilidad, reset, control operacional, creación de plantillas `.service` y configuración persistente del directorio. La CLI continúa en mock.
 
 El mock solo provee nombres de unidad y no muta el sistema. `SystemdProvider` enumera unit files y permite observar/iniciar/detener/habilitar/deshabilitar servicios y ejecutar daemon-reload. La API crea archivos `.service` sin sobrescribir, como plantillas sin `ExecStart`, luego recarga systemd y ejecuta discovery completo. La plantilla requiere editar `ExecStart` antes de poder iniciar una tarea real. El coordinador controla el orden OS→DB. Los estados no representados se rechazan. Las llamadas a `systemctl` todavía no tienen timeout configurado y la integración real de unit-file creation no se ha validado en el host Linux.
 
 ## Pruebas y entorno
 
 - Tests unitarios inline para token/.env, API, creación de plantilla y discovery, checkpoint/reanudación, filtros, paginación, migraciones y handshake/compensación; test CLI por subprocess en un directorio temporal. Tags no tiene tests propios todavía.
-- Antes de los cambios de alias/puerto, la suite de 27 tests unitarios y 1 CLI pasó en Windows y Docker Linux. Tras esos cambios, `cargo fmt --all -- --check` y `cargo check --locked --all-targets` pasan; falta reejecutar tests.
+- `cargo test --locked` pasó en Windows con 28 tests unitarios y 1 CLI, incluida la prueba de persistencia de descripción. Docker Linux no se volvió a ejecutar en este cambio.
 - Las migraciones se ejecutan mediante código propio. `chrono` y `refinery` no tenían uso directo, así que se retiraron del manifiesto para evitar dependencias innecesarias; `thiserror` se usa para propagar errores de proveedor/discovery.
 
 ## Trabajo acordado, aún pendiente

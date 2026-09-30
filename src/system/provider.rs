@@ -37,6 +37,10 @@ pub trait SystemProvider {
         Err(SystemProviderError::UnsupportedOperation)
     }
 
+    fn is_active(&self, unit_name: &str) -> Result<bool, SystemProviderError> {
+        self.operational_state(unit_name).map(|state| state.active)
+    }
+
     fn set_active(&self, _unit_name: &str, _active: bool) -> Result<(), SystemProviderError> {
         Err(SystemProviderError::UnsupportedOperation)
     }

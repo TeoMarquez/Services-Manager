@@ -21,10 +21,12 @@ La implementación actual es REST/JSON bajo `/api/v1`. Es un primer contrato fun
 | `GET` | `/api/v1/health` | Implementado |
 | `POST` | `/api/v1/discovery` | Implementado, procesa una página (`batch_size` opcional) |
 | `GET` | `/api/v1/services` | Implementado: `search`, `present`, `visible`, `system_service`, `tag_id`, `page`, `per_page` |
+| `GET` | `/api/v1/services/{unit_name}` | Devuelve ficha desde DB y `active` consultado en tiempo real a systemd |
 | `POST` | `/api/v1/services` | Crea plantilla; cuerpo `{"name":"worker","description":"Worker de ejemplo"}` |
 | `GET`, `PUT` | `/api/v1/settings/service-directory` | Obtiene/cambia la carpeta absoluta existente; PUT recibe `{"path":"/etc/systemd/system"}` |
 | `PUT` | `/api/v1/services/{unit_name}/visibility` | Implementado, metadata del gestor |
-| `PUT` | `/api/v1/services/{unit_name_or_id}/alias` | Body `{"alias":"nombre legible"}`; acepta nombre completo de unidad o ID de DB |
+| `PUT` | `/api/v1/services/{unit_name}/alias` | Body `{"alias":"nuevo-alias"}`; guarda el alias y responde `204`; también admite ID numérico como identificador |
+| `PUT` | `/api/v1/services/{unit_name}/description` | Body `{"description":"nueva descripción"}`; persiste en DB y responde `204` |
 | `POST` | `/api/v1/services/{unit_name}/start` | Implementado mediante coordinador OS → verificación → DB → compensación |
 | `POST` | `/api/v1/services/{unit_name}/stop` | Implementado mediante coordinador OS → verificación → DB → compensación |
 | `PUT` | `/api/v1/services/{unit_name}/startup-mode` | Implementado; cuerpo `{"mode":"enabled"}` o `{"mode":"disabled"}` |
@@ -35,6 +37,8 @@ La implementación actual es REST/JSON bajo `/api/v1`. Es un primer contrato fun
 | `POST` | `/api/v1/reset` | Implementado, elimina solo datos gestionados y checkpoints |
 
 El binario `api` usa `SystemdProvider`; sus rutas de discovery/control invocan `systemctl`. Los estados admitidos son `active`/`inactive` y `enabled`/`disabled`; `failed`, estados transitorios y estados de inicio como `masked`, `static` o `enabled-runtime` se rechazan. La CLI continúa utilizando el mock. Tests con proveedor falso verifican la ruta `start`; tests de integración con un host systemd siguen pendientes.
+
+El detalle de servicio consulta `systemctl show --property=ActiveState --value -- {unit_name}` en cada petición y añade `active: true` para `ActiveState=active` o `active: false` para `inactive`. El valor es una observación en vivo, no el estado guardado en la DB. Si systemd devuelve un estado transitorio/no soportado o falla la consulta, la API responde `502`; una unidad que no está en el inventario de la DB devuelve `404`.
 
 La plantilla creada contiene `[Unit]`, la descripción y una sección `[Service]` de tipo `oneshot`, sin `ExecStart`. Debe completarse antes de ejecutar el servicio. La ruta de creación escribe exclusivamente `{name}.service`; rechaza nombres con separadores/ruta o caracteres fuera de la lista permitida. Tras escribir, solicita `systemctl daemon-reload` y corre un discovery completo. Si systemd no reconoce el archivo por estar en una carpeta ajena a su unit search path, el endpoint devuelve error y deja el archivo para revisión.
 

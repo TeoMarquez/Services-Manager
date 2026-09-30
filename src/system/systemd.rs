@@ -173,6 +173,18 @@ impl SystemProvider for SystemdProvider {
         })
     }
 
+    fn is_active(&self, unit_name: &str) -> Result<bool, SystemProviderError> {
+        Self::validate_unit(unit_name)?;
+        let state = self.output(&["show", "--property=ActiveState", "--value", "--", unit_name])?;
+        match state.trim() {
+            "active" => Ok(true),
+            "inactive" => Ok(false),
+            value => Err(SystemProviderError::Control(format!(
+                "unknown ActiveState '{value}' for {unit_name}"
+            ))),
+        }
+    }
+
     fn set_active(&self, unit_name: &str, active: bool) -> Result<(), SystemProviderError> {
         Self::validate_unit(unit_name)?;
         self.run(&[if active { "start" } else { "stop" }, "--", unit_name])

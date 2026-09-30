@@ -52,6 +52,7 @@ pub fn router(state: ApiState) -> Router {
         .route("/api/v1/health", get(health))
         .route("/api/v1/discovery", post(discover))
         .route("/api/v1/services", get(list_services).post(create_service))
+        .route("/api/v1/services/{unit_name}", get(get_service))
         .route(
             "/api/v1/settings/service-directory",
             get(get_service_directory).put(set_service_directory),
@@ -61,6 +62,10 @@ pub fn router(state: ApiState) -> Router {
             put(set_visibility),
         )
         .route("/api/v1/services/{unit_name_or_id}/alias", put(set_alias))
+        .route(
+            "/api/v1/services/{unit_name}/description",
+            put(set_description),
+        )
         .route("/api/v1/services/{unit_name}/start", post(start_service))
         .route("/api/v1/services/{unit_name}/stop", post(stop_service))
         .route(
@@ -246,6 +251,38 @@ async fn list_services(
 }
 
 #[derive(Debug, Serialize)]
+struct ServiceDetail {
+    #[serde(flatten)]
+    service: crate::db::models::Service,
+    active: bool,
+}
+
+async fn get_service(
+    State(state): State<ApiState>,
+    Path(unit_name): Path<String>,
+) -> Result<Json<ServiceDetail>, ApiError> {
+    let connection = Arc::clone(&state.connection);
+    let provider = Arc::clone(&state.provider);
+    let result = tokio::task::spawn_blocking(move || {
+        let conn = connection
+            .lock()
+            .map_err(|_| ApiError::internal("database lock is poisoned"))?;
+        let repository = ServiceRepository::new(&conn);
+        let service = repository
+            .find_by_unit_name(&unit_name)
+            .map_err(ApiError::internal)?
+            .ok_or_else(|| ApiError::not_found("service"))?;
+        let active = provider
+            .is_active(&unit_name)
+            .map_err(|error| ApiError::new(StatusCode::BAD_GATEWAY, error.to_string()))?;
+        Ok::<_, ApiError>(ServiceDetail { service, active })
+    })
+    .await
+    .map_err(ApiError::internal)??;
+    Ok(Json(result))
+}
+
+#[derive(Debug, Serialize)]
 struct ServiceDirectoryResponse {
     path: String,
 }
@@ -398,6 +435,33 @@ async fn set_alias(
         Err(_) => repository.set_alias(&unit_name_or_id, alias),
     }
     .map_err(ApiError::internal)?;
+    if !updated {
+        return Err(ApiError::not_found("service"));
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Deserialize)]
+struct SetDescriptionRequest {
+    description: String,
+}
+
+async fn set_description(
+    State(state): State<ApiState>,
+    Path(unit_name): Path<String>,
+    Json(request): Json<SetDescriptionRequest>,
+) -> Result<StatusCode, ApiError> {
+    let description = request.description.trim();
+    if description.is_empty() || description.chars().any(char::is_control) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "description must be non-empty and contain no control characters",
+        ));
+    }
+    let conn = lock_database(&state)?;
+    let updated = ServiceRepository::new(&conn)
+        .set_description(&unit_name, description)
+        .map_err(ApiError::internal)?;
     if !updated {
         return Err(ApiError::not_found("service"));
     }
@@ -721,6 +785,43 @@ mod tests {
         let result: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(result["total_items"], 1);
         assert_eq!(result["items"][0]["unit_name"], "worker.service");
+    }
+
+    #[tokio::test]
+    async fn set_description_endpoint_persists_description_and_returns_no_content() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON").unwrap();
+        crate::db::migrations::run(&conn);
+        ServiceRepository::new(&conn)
+            .insert("worker.service", "DISCOVERED")
+            .unwrap();
+        let state = ApiState::new(conn, crate::system::MockSystem::new());
+        let connection = Arc::clone(&state.connection);
+
+        let response = router(state)
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/api/v1/services/worker.service/description")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"description":"Updated worker description"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        let connection = connection.lock().unwrap();
+        let service = ServiceRepository::new(&connection)
+            .find_by_unit_name("worker.service")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            service.description.as_deref(),
+            Some("Updated worker description")
+        );
     }
 
     #[tokio::test]
