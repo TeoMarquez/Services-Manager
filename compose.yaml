@@ -1,0 +1,35 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+      - cargo-target-real:/workspace/target
+    command: ["cargo", "test", "--locked"]
+
+  api:
+    profiles: ["api"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /workspace
+    environment:
+      SERVICES_MANAGER_API_BIND: 0.0.0.0:3000
+      SERVICES_MANAGER_API_TOKEN: ${SERVICES_MANAGER_API_TOKEN:-}
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - .:/workspace
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+      - cargo-target-real:/workspace/target
+    command: ["cargo", "run", "--locked", "--bin", "api"]
+
+volumes:
+  cargo-registry:
+  cargo-git:
+  cargo-target-real:

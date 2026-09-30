@@ -1,43 +1,24 @@
-mod db;
-mod system;
-mod services;
-mod cli;
-
-use db::{
-    create_connection,
-    ServiceRepository,
-    TagRepository,
+use services_manager::{
+    cli,
+    db::{ServiceRepository, TagRepository, create_connection},
+    services::sync::sync,
+    system::MockSystem,
 };
 
-use system::MockSystem;
-use services::sync::sync;
-
 fn main() {
-
     tracing_subscriber::fmt::init();
 
     let db = create_connection();
 
-    let service_repo =
-        ServiceRepository::new(&db);
+    let service_repo = ServiceRepository::new(&db);
 
-    let tag_repo =
-        TagRepository::new(&db);
+    let tag_repo = TagRepository::new(&db);
 
-    let system =
-        MockSystem::new();
+    let system = MockSystem::new();
 
+    if let Err(error) = sync(&system, &service_repo) {
+        eprintln!("Discovery failed: {error}");
+    }
 
-    sync(
-        &system,
-        &service_repo
-    );
-
-
-    cli::run(
-        &service_repo,
-        &tag_repo,
-        &system,
-    );
-
+    cli::run(&service_repo, &tag_repo, &system);
 }
