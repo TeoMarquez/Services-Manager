@@ -60,6 +60,7 @@ pub fn router(state: ApiState) -> Router {
             "/api/v1/services/{unit_name}/visibility",
             put(set_visibility),
         )
+        .route("/api/v1/services/{unit_name_or_id}/alias", put(set_alias))
         .route("/api/v1/services/{unit_name}/start", post(start_service))
         .route("/api/v1/services/{unit_name}/stop", post(stop_service))
         .route(
@@ -370,6 +371,36 @@ async fn set_visibility(
     repository
         .set_visible(&unit_name, request.visible)
         .map_err(ApiError::internal)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Deserialize)]
+struct SetAliasRequest {
+    alias: String,
+}
+
+async fn set_alias(
+    State(state): State<ApiState>,
+    Path(unit_name_or_id): Path<String>,
+    Json(request): Json<SetAliasRequest>,
+) -> Result<StatusCode, ApiError> {
+    let alias = request.alias.trim();
+    if alias.is_empty() || alias.chars().any(char::is_control) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "alias must be non-empty and contain no control characters",
+        ));
+    }
+    let conn = lock_database(&state)?;
+    let repository = ServiceRepository::new(&conn);
+    let updated = match unit_name_or_id.parse::<i64>() {
+        Ok(id) => repository.set_alias_by_id(id, alias),
+        Err(_) => repository.set_alias(&unit_name_or_id, alias),
+    }
+    .map_err(ApiError::internal)?;
+    if !updated {
+        return Err(ApiError::not_found("service"));
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 

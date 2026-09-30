@@ -2,10 +2,18 @@
 
 ## Estado ejecutable
 
-- `cargo test --offline`: 27 tests unitarios y 1 test CLI pasan localmente en Windows.
-- `docker compose run --rm dev cargo test --locked`: la misma suite pasa en Docker Linux.
+- La última ejecución registrada antes de los cambios de alias/puerto pasó 27 tests unitarios y 1 test CLI localmente y en Docker Linux.
+- Tras los cambios de alias/puerto, `cargo fmt --all -- --check` y `cargo check --locked --all-targets` pasan; la suite no se ha vuelto a ejecutar.
 - Los tests de control usan proveedor falso; no han ejercitado `systemctl` real.
-- Ya están cubiertos discovery por páginas/reanudación, búsqueda/paginación, migración idempotente, token/.env, acceso bearer, endpoints de lectura/reset/discovery/start/configuración/creación de unit file y control éxito/error OS/fallo DB con rollback exitoso.
+- La suite definida cubre discovery por páginas/reanudación, búsqueda/paginación, migración idempotente, token/.env, acceso bearer, endpoints de lectura/reset/discovery/start/configuración/creación de unit file y control éxito/error OS/fallo DB con rollback exitoso.
+- No hay tests para operaciones CRUD de tags ni para asignación de alias; tampoco para selección/persistencia de puerto. La asignación de alias recién se incorporó y necesita cobertura.
+
+## Ubicación y organización
+
+- Los tests unitarios están junto al código, dentro de módulos `#[cfg(test)]`: `src/api.rs`, `src/token.rs`, `src/db/migrations.rs`, `src/db/settings.rs`, `src/services/control.rs`, `src/services/create.rs`, `src/services/list.rs` y `src/services/sync.rs`.
+- El test de CLI de proceso completo vive en `tests/cli.rs`; crea una carpeta temporal con migraciones y fixture mock y conduce el menú mediante stdin.
+- Esta organización facilita probar detalles internos de cada componente. La suite API está concentrada en `src/api.rs`, por lo que conviene separar tests de rutas al crecer, y faltan tests de repositorio/tags y nuevas rutas.
+- Ejecutar todos con `cargo test`; ejecutar el test de integración CLI con `cargo test --test cli`.
 
 ## Capas
 
@@ -13,9 +21,11 @@
 
 - Reglas de descubrimiento, identidad, mapeo y transición.
 - Construcción de filtros, parámetros, paginación y resultados vacíos.
-- Tags: creación idempotente, asociación duplicada, eliminación y cascada.
+- Tags: aún sin tests automatizados de repositorio/API.
 - Control coordinado: orden OS → verificación → DB y compensación ante fallo.
 - Token: generación, persistencia, prioridad de `.env` y rotación explícita.
+- Puerto: agregar pruebas de precedencia CLI/entorno/`.env`, validación de rango y persistencia preservando el token y otras variables.
+- Alias: agregar pruebas de API por nombre e ID, alias inválido/servicio inexistente y búsqueda posterior por alias.
 - Creación: validación del nombre/descripcion, escritura de plantilla, rollback tras fallo de daemon-reload y discovery posterior usando proveedor falso.
 - Pendiente: verificación que falla/desacuerda, operación OS parcialmente aplicada, rollback fallido, indeterminación, llamadas concurrentes/idempotencia y timeout.
 

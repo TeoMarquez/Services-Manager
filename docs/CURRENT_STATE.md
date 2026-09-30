@@ -15,14 +15,14 @@
 
 Al iniciar, el binario CLI crea la DB y repositorios, ejecuta `services::sync::sync` con `MockSystem` y después abre el menú. El binario API usa `SystemdProvider`. Discovery procesa páginas, persiste sus registros y checkpoint de cursor en una transacción por página, y reanuda tras error. Solo marca ausencias al guardar la última página del ciclo. Systemd guarda el snapshot de unit files en su cursor para mantener estable el inventario lógico de ese ciclo.
 
-La capa de consultas ofrece filtros combinables/paginación y búsqueda parametrizada por nombre, alias o descripción. La API REST implementa discovery incremental, consultas, tags, visibilidad, reset, control operacional, creación de plantillas `.service` y configuración persistente del directorio. La CLI continúa en mock.
+La capa de consultas ofrece filtros combinables/paginación y búsqueda parametrizada por nombre, alias o descripción. La API REST implementa discovery incremental, consultas, alias, tags, visibilidad, reset, control operacional, creación de plantillas `.service` y configuración persistente del directorio. La CLI continúa en mock.
 
 El mock solo provee nombres de unidad y no muta el sistema. `SystemdProvider` enumera unit files y permite observar/iniciar/detener/habilitar/deshabilitar servicios y ejecutar daemon-reload. La API crea archivos `.service` sin sobrescribir, como plantillas sin `ExecStart`, luego recarga systemd y ejecuta discovery completo. La plantilla requiere editar `ExecStart` antes de poder iniciar una tarea real. El coordinador controla el orden OS→DB. Los estados no representados se rechazan. Las llamadas a `systemctl` todavía no tienen timeout configurado y la integración real de unit-file creation no se ha validado en el host Linux.
 
 ## Pruebas y entorno
 
-- Tests unitarios de token/.env, creación de plantilla y discovery, checkpoint/reanudación, filtros, paginación, tags y handshake/compensación; test CLI por subprocess en un directorio temporal.
-- Docker Compose validado con Rust 1.88; la suite completa pasó en Windows y dentro del contenedor Linux.
+- Tests unitarios inline para token/.env, API, creación de plantilla y discovery, checkpoint/reanudación, filtros, paginación, migraciones y handshake/compensación; test CLI por subprocess en un directorio temporal. Tags no tiene tests propios todavía.
+- Antes de los cambios de alias/puerto, la suite de 27 tests unitarios y 1 CLI pasó en Windows y Docker Linux. Tras esos cambios, `cargo fmt --all -- --check` y `cargo check --locked --all-targets` pasan; falta reejecutar tests.
 - Las migraciones se ejecutan mediante código propio. `chrono` y `refinery` no tenían uso directo, así que se retiraron del manifiesto para evitar dependencias innecesarias; `thiserror` se usa para propagar errores de proveedor/discovery.
 
 ## Trabajo acordado, aún pendiente
@@ -46,4 +46,4 @@ El mock solo provee nombres de unidad y no muta el sistema. `SystemdProvider` en
 
 La DB representa el estado observado del sistema. Para control de servicios, se ejecuta primero la operación en el sistema operativo; solo tras confirmación se persiste el estado en DB. La API puede crear plantillas, configurar su carpeta, y fuerza discovery después. La plantilla no ejecuta un proceso porque no incluye `ExecStart`. La CLI sigue en mock y no ofrece todavía start/stop/modo de inicio. El contenedor normal valida build y tests; no accede al systemd del host.
 
-El token de API vive en `.env` en la raíz detectada del despliegue, que queda ignorado por Git. Al faltar, se genera y guarda; `--overwrite-token` rota/establece el secreto. Se imprime al iniciar, salvo que se pase `--silent-token`. La variable de entorno se usa como fallback si `.env` no tiene token. `run.bat` y `run.sh` arrancan desde la raíz del repositorio y reenvían sus argumentos; el binario también la detecta a partir de `migrations/` en sus directorios antecesores.
+El token de API vive en `.env` en la raíz detectada del despliegue, que queda ignorado por Git. Al faltar, se genera y guarda; `--overwrite-token` rota/establece el secreto. Se imprime al iniciar, salvo que se pase `--silent-token`. `--port` selecciona y persiste `SERVICES_MANAGER_API_PORT`; el puerto efectivo se imprime al abrir el socket. La variable de entorno del token se usa como fallback si `.env` no tiene token. `run.bat` y `run.sh` arrancan desde la raíz del repositorio y reenvían sus argumentos; el binario también la detecta a partir de `migrations/` en sus directorios antecesores.

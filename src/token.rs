@@ -10,6 +10,7 @@ use std::{
 use thiserror::Error;
 
 const TOKEN_KEY: &str = "SERVICES_MANAGER_API_TOKEN";
+const PORT_KEY: &str = "SERVICES_MANAGER_API_PORT";
 const TOKEN_BYTES: usize = 32;
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -17,6 +18,7 @@ pub struct TokenOptions {
     pub token: Option<String>,
     pub overwrite: bool,
     pub silent: bool,
+    pub port: Option<u16>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -36,6 +38,8 @@ pub enum TokenError {
     OverwriteRequired { path: PathBuf },
     #[error("invalid command line: {0}")]
     Arguments(String),
+    #[error("invalid API port '{0}'; expected a number from 1 to 65535")]
+    InvalidPort(String),
     #[error("could not read or write token file: {0}")]
     Io(#[from] io::Error),
 }
@@ -56,9 +60,21 @@ pub fn parse_args(args: &[String]) -> Result<TokenOptions, TokenError> {
             }
             "--overwrite-token" => options.overwrite = true,
             "--silent-token" => options.silent = true,
+            "--port" => {
+                index += 1;
+                let value = args.get(index).ok_or_else(|| {
+                    TokenError::Arguments("--port requires a value from 1 to 65535".to_owned())
+                })?;
+                let port = value
+                    .parse::<u16>()
+                    .ok()
+                    .filter(|port| *port != 0)
+                    .ok_or_else(|| TokenError::InvalidPort(value.clone()))?;
+                options.port = Some(port);
+            }
             "--help" | "-h" => {
                 return Err(TokenError::Arguments(
-                    "usage: api [--token VALUE] [--overwrite-token] [--silent-token]; an empty --token generates a token".to_owned(),
+                    "usage: api [--token VALUE] [--overwrite-token] [--silent-token] [--port PORT]; an empty --token generates a token".to_owned(),
                 ));
             }
             argument => {
@@ -70,6 +86,38 @@ pub fn parse_args(args: &[String]) -> Result<TokenOptions, TokenError> {
         index += 1;
     }
     Ok(options)
+}
+
+pub fn configure_port(
+    requested_port: Option<u16>,
+    environment_port: Option<&str>,
+    bind_port: Option<u16>,
+    dotenv_path: impl AsRef<Path>,
+) -> Result<u16, TokenError> {
+    let dotenv_path = dotenv_path.as_ref();
+    let saved_port = read_dotenv_value(dotenv_path, PORT_KEY)?;
+    let environment_port = environment_port
+        .filter(|value| !value.trim().is_empty())
+        .map(parse_port)
+        .transpose()?;
+    let saved_port = saved_port.as_deref().map(parse_port).transpose()?;
+    let port = requested_port
+        .or(environment_port)
+        .or(saved_port)
+        .or(bind_port)
+        .unwrap_or(3000);
+    if requested_port.is_some() || saved_port.is_none() {
+        write_dotenv_value(dotenv_path, PORT_KEY, &port.to_string())?;
+    }
+    Ok(port)
+}
+
+fn parse_port(value: &str) -> Result<u16, TokenError> {
+    value
+        .parse::<u16>()
+        .ok()
+        .filter(|port| *port != 0)
+        .ok_or_else(|| TokenError::InvalidPort(value.to_owned()))
 }
 
 pub fn configure_token(
@@ -190,6 +238,10 @@ fn fill_random(_: &mut [u8]) -> io::Result<()> {
 }
 
 fn read_dotenv_token(path: &Path) -> io::Result<Option<String>> {
+    read_dotenv_value(path, TOKEN_KEY)
+}
+
+fn read_dotenv_value(path: &Path, requested_key: &str) -> io::Result<Option<String>> {
     let content = match fs::read_to_string(path) {
         Ok(content) => content,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -201,7 +253,7 @@ fn read_dotenv_token(path: &Path) -> io::Result<Option<String>> {
             return None;
         }
         let (key, value) = line.split_once('=')?;
-        if key.trim() != TOKEN_KEY {
+        if key.trim() != requested_key {
             return None;
         }
         let value = value.trim();
@@ -219,6 +271,10 @@ fn read_dotenv_token(path: &Path) -> io::Result<Option<String>> {
 }
 
 fn write_dotenv_token(path: &Path, token: &str) -> io::Result<()> {
+    write_dotenv_value(path, TOKEN_KEY, token)
+}
+
+fn write_dotenv_value(path: &Path, requested_key: &str, value: &str) -> io::Result<()> {
     let mut lines = match fs::read_to_string(path) {
         Ok(contents) => contents.lines().map(str::to_owned).collect::<Vec<_>>(),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Vec::new(),
@@ -229,18 +285,18 @@ fn write_dotenv_token(path: &Path, token: &str) -> io::Result<()> {
         let is_token_line = line
             .trim()
             .split_once('=')
-            .is_some_and(|(key, _)| key.trim() == TOKEN_KEY);
+            .is_some_and(|(key, _)| key.trim() == requested_key);
         if is_token_line {
             if replaced {
                 return false;
             }
-            *line = format!("{TOKEN_KEY}={token}");
+            *line = format!("{requested_key}={value}");
             replaced = true;
         }
         true
     });
     if !replaced {
-        lines.push(format!("{TOKEN_KEY}={token}"));
+        lines.push(format!("{requested_key}={value}"));
     }
     let mut content = lines.join("\n");
     content.push('\n');
@@ -299,6 +355,7 @@ mod tests {
             token: Some("c".repeat(32)),
             overwrite: true,
             silent: true,
+            port: None,
         };
         let configured = configure_token(options, None, &path).unwrap();
         assert_eq!(configured.value, "c".repeat(32));
@@ -318,6 +375,7 @@ mod tests {
             token: Some("b".repeat(32)),
             overwrite: false,
             silent: false,
+            port: None,
         };
         assert!(matches!(
             configure_token(options, None, &path),

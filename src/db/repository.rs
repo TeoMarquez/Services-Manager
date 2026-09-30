@@ -411,6 +411,22 @@ impl<'a> ServiceRepository<'a> {
         Ok(())
     }
 
+    pub fn set_alias(&self, unit_name: &str, alias: &str) -> Result<bool> {
+        let updated = self.conn.execute(
+            "UPDATE services SET alias = ? WHERE unit_name = ?",
+            params![alias, unit_name],
+        )?;
+        Ok(updated > 0)
+    }
+
+    pub fn set_alias_by_id(&self, id: i64, alias: &str) -> Result<bool> {
+        let updated = self.conn.execute(
+            "UPDATE services SET alias = ? WHERE id = ?",
+            params![alias, id],
+        )?;
+        Ok(updated > 0)
+    }
+
     pub fn save_operational_state(&self, unit_name: &str, state: OperationalState) -> Result<()> {
         let tx = self.conn.unchecked_transaction()?;
         let service_id: i64 = tx.query_row(

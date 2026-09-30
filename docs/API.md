@@ -24,6 +24,7 @@ La implementación actual es REST/JSON bajo `/api/v1`. Es un primer contrato fun
 | `POST` | `/api/v1/services` | Crea plantilla; cuerpo `{"name":"worker","description":"Worker de ejemplo"}` |
 | `GET`, `PUT` | `/api/v1/settings/service-directory` | Obtiene/cambia la carpeta absoluta existente; PUT recibe `{"path":"/etc/systemd/system"}` |
 | `PUT` | `/api/v1/services/{unit_name}/visibility` | Implementado, metadata del gestor |
+| `PUT` | `/api/v1/services/{unit_name_or_id}/alias` | Body `{"alias":"nombre legible"}`; acepta nombre completo de unidad o ID de DB |
 | `POST` | `/api/v1/services/{unit_name}/start` | Implementado mediante coordinador OS → verificación → DB → compensación |
 | `POST` | `/api/v1/services/{unit_name}/stop` | Implementado mediante coordinador OS → verificación → DB → compensación |
 | `PUT` | `/api/v1/services/{unit_name}/startup-mode` | Implementado; cuerpo `{"mode":"enabled"}` o `{"mode":"disabled"}` |
@@ -56,7 +57,9 @@ Opciones de ejecución: `--token VALOR` usa/guarda un token inicial; `--token ""
 
 Un token suministrado por argumento puede quedar visible en historial del shell o lista de procesos. Para pruebas, es preferible dejar que se genere y se guarde; para configurar uno manualmente, proteger el historial y los permisos del usuario.
 
-El binario escucha en `127.0.0.1:3000` por defecto; `SERVICES_MANAGER_API_BIND` puede cambiarlo. La autenticación es un único token compartido, sin roles por operación. Compose publica el puerto en loopback del host, pero el contenedor no tiene acceso al systemd del host: sus rutas de discovery/control no validan el proveedor real.
+El binario escucha en `127.0.0.1:3000` por defecto; `SERVICES_MANAGER_API_BIND` puede cambiarlo. Tras abrir correctamente el socket, imprime el puerto efectivo. La autenticación es un único token compartido, sin roles por operación. Compose publica el puerto en loopback del host, pero el contenedor no tiene acceso al systemd del host: sus rutas de discovery/control no validan el proveedor real.
+
+`--port PORT` selecciona un puerto entre 1 y 65535, lo guarda como `SERVICES_MANAGER_API_PORT` en `.env` y lo usa en el arranque actual; sin el argumento se reutiliza el puerto guardado o se usa `3000`. `SERVICES_MANAGER_API_PORT` del entorno tiene precedencia sobre `.env`; `SERVICES_MANAGER_API_BIND` puede elegir la IP de escucha y su puerto se usa como fallback al inicializar. El proceso imprime el puerto efectivo al iniciar. Los scripts `./run.sh --port 8080` y `run.bat --port 8080` reenvían el argumento.
 
 `.env`, `migrations/` y `data/` se mantienen relativos a la raíz del proyecto. Los scripts `run.bat` y `run.sh` cambian a esa raíz antes de lanzar el binario y reenvían los argumentos recibidos. El propio binario también busca la carpeta `migrations/` en los directorios antecesores de su ejecutable y usa esa raíz como directorio actual. Mantener `migrations/` junto a la raíz de despliegue y dar permisos de escritura al usuario sobre `.env` y `data/`.
 
